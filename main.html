@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>나만의 구구단 놀이</title>
+    <style>
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            text-align: center;
+            background-color: #f0f8ff;
+            margin: 0;
+            padding: 10px;
+            touch-action: manipulation;
+        }
+        h1 { font-size: 24px; color: #333; margin-bottom: 5px; }
+        #progress-text { font-size: 14px; color: #666; margin-bottom: 15px; font-weight: bold; }
+        
+        .stage-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 5px;
+            margin-bottom: 20px;
+        }
+        .stage-btn {
+            padding: 10px 15px;
+            font-size: 16px;
+            background-color: #add8e6;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stage-btn.active { background-color: #ffb6c1; font-weight: bold; }
+        .review-btn { background-color: #ffd700; }
+        .review-btn.active { background-color: #ff8c00; color: white; }
+        
+        #question-area {
+            font-size: 40px;
+            font-weight: bold;
+            margin: 20px 0;
+            color: #4a4a4a;
+        }
+        
+        #hint-area {
+            min-height: 100px;
+            margin: 10px auto;
+            padding: 10px;
+            background: #fff;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 300px;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .dot-row { display: flex; justify-content: center; margin: 2px 0; }
+        .dot {
+            width: 15px;
+            height: 15px;
+            background-color: #ff6b6b;
+            border-radius: 50%;
+            margin: 0 2px;
+        }
+        .hint-text { font-size: 14px; color: #555; margin-top: 10px; }
+
+        .numpad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+        .num-btn {
+            background-color: #fff;
+            border: 2px solid #ddd;
+            border-radius: 15px;
+            font-size: 24px;
+            padding: 15px 0;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .num-btn:active { background-color: #e0e0e0; transform: translateY(2px); }
+        .btn-action { background-color: #ffd700; border-color: #e5c100; }
+        
+        #message { font-size: 18px; font-weight: bold; height: 25px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>구구단 놀이 🚀</h1>
+    <div id="progress-text">단원을 선택해서 10문제를 풀어보자!</div>
+    
+    <div class="stage-container" id="stages">
+        <button class="stage-btn" onclick="setStage(5)">5단</button>
+        <button class="stage-btn" onclick="setStage(2)">2단</button>
+        <button class="stage-btn" onclick="setStage(3)">3단</button>
+        <button class="stage-btn" onclick="setStage(9)">9단</button>
+        <button class="stage-btn" onclick="setStage(4)">4단</button>
+        <button class="stage-btn" onclick="setStage(6)">6단</button>
+        <button class="stage-btn" onclick="setStage(8)">8단</button>
+        <button class="stage-btn" onclick="setStage(7)">7단</button>
+        <button class="stage-btn review-btn" id="review-btn" onclick="startReview()">오답 모아풀기</button>
+    </div>
+
+    <div id="question-area">단원을 선택해!</div>
+    
+    <div id="hint-area"></div>
+
+    <div class="numpad">
+        <button class="num-btn" onclick="appendNum(1)">1</button>
+        <button class="num-btn" onclick="appendNum(2)">2</button>
+        <button class="num-btn" onclick="appendNum(3)">3</button>
+        <button class="num-btn" onclick="appendNum(4)">4</button>
+        <button class="num-btn" onclick="appendNum(5)">5</button>
+        <button class="num-btn" onclick="appendNum(6)">6</button>
+        <button class="num-btn" onclick="appendNum(7)">7</button>
+        <button class="num-btn" onclick="appendNum(8)">8</button>
+        <button class="num-btn" onclick="appendNum(9)">9</button>
+        <button class="num-btn btn-action" onclick="clearNum()">지우기</button>
+        <button class="num-btn" onclick="appendNum(0)">0</button>
+        <button class="num-btn btn-action" onclick="checkAnswer()">확인</button>
+    </div>
+
+    <div id="message"></div>
+
+    <script>
+        let currentStage = 0;
+        let currentMultiplier = 0;
+        let userAnswer = "";
+        
+        let isReviewMode = false;
+        let mistakes = []; // 오답 기록 배열
+        
+        // 점수 및 진행도 관련 변수
+        const MAX_QUESTIONS = 10;
+        let questionCount = 0;
+        let correctCount = 0;
+        let isFirstAttempt = true; // 첫 시도에 맞혔는지 확인 (점수 산정용)
+
+        function setStage(stage) {
+            isReviewMode = false;
+            currentStage = stage;
+            questionCount = 0;
+            correctCount = 0;
+            
+            document.querySelectorAll('.stage-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            nextQuestion();
+        }
+
+        function startReview() {
+            if(mistakes.length === 0) {
+                let msgBox = document.getElementById("message");
+                msgBox.style.color = "green";
+                msgBox.innerText = "아직 틀린 문제가 없어요! 완벽해요 🌟";
+                setTimeout(() => msgBox.innerText = "", 2000);
+                return;
+            }
+            
+            isReviewMode = true;
+            document.querySelectorAll('.stage-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('review-btn').classList.add('active');
+            
+            // 오답 모드 시작 시 UI 초기화
+            document.getElementById("progress-text").innerText = `틀렸던 문제들 뿌수기! (남은 문제: ${mistakes.length}개)`;
+            nextQuestion();
+        }
+
+        function nextQuestion() {
+            // 10문제 종료 조건 체크 (일반 모드일 때만 적용)
+            if(!isReviewMode && questionCount >= MAX_QUESTIONS) {
+                endSession();
+                return;
+            }
+
+            if(isReviewMode) {
+                let randIdx = Math.floor(Math.random() * mistakes.length);
+                currentStage = mistakes[randIdx].dan;
+                currentMultiplier = mistakes[randIdx].mult;
+            } else {
+                if(currentStage === 0) return;
+                currentMultiplier = Math.floor(Math.random() * 9) + 1;
+                questionCount++;
+                document.getElementById("progress-text").innerText = `${currentStage}단 도전 중! (${questionCount} / ${MAX_QUESTIONS})`;
+            }
+            
+            userAnswer = "";
+            isFirstAttempt = true; // 새 문제이므로 첫 시도로 초기화
+            document.getElementById("hint-area").style.display = "none";
+            document.getElementById("message").innerText = "";
+            updateDisplay();
+        }
+
+        function endSession() {
+            let score = (correctCount / MAX_QUESTIONS) * 100;
+            let msgBox = document.getElementById("message");
+            let progressText = document.getElementById("progress-text");
+            
+            document.getElementById("question-area").innerText = "연습 완료!";
+            document.getElementById("hint-area").style.display = "none";
+            
+            if (score >= 80) {
+                msgBox.style.color = "blue";
+                msgBox.innerText = `수고했어! 💯 점수: ${score}점`;
+                progressText.innerText = "훌륭하게 통과했어! 다른 단원도 도전해봐 🏆";
+            } else {
+                msgBox.style.color = "red";
+                msgBox.innerText = `조금 더 연습하자! 점수: ${score}점`;
+                progressText.innerText = "틀린 문제는 [오답 모아풀기]에서 연습할 수 있어 💡";
+            }
+            
+            currentStage = 0;
+            document.querySelectorAll('.stage-btn').forEach(btn => btn.classList.remove('active'));
+        }
+
+        function updateDisplay() {
+            if(currentStage > 0) {
+                document.getElementById("question-area").innerText = `${currentStage} × ${currentMultiplier} = ${userAnswer || "?"}`;
+            }
+        }
+
+        function appendNum(num) {
+            if(userAnswer.length < 2) {
+                userAnswer += num.toString();
+                updateDisplay();
+            }
+        }
+
+        function clearNum() {
+            userAnswer = "";
+            updateDisplay();
+        }
+
+        function checkAnswer() {
+            if(!userAnswer || currentStage === 0) return;
+            
+            let correct = currentStage * currentMultiplier;
+            let msgBox = document.getElementById("message");
+
+            if(parseInt(userAnswer) === correct) {
+                msgBox.style.color = "green";
+                msgBox.innerText = "정답이야! 참 잘했어 🎉";
+                
+                // 첫 번째 시도에 맞혔을 때만 정답 카운트 상승
+                if(!isReviewMode && isFirstAttempt) {
+                    correctCount++;
+                }
+                
+                if(isReviewMode) {
+                    mistakes = mistakes.filter(m => !(m.dan === currentStage && m.mult === currentMultiplier));
+                    document.getElementById("progress-text").innerText = `틀렸던 문제들 뿌수기! (남은 문제: ${mistakes.length}개)`;
+                    
+                    if(mistakes.length === 0) {
+                        setTimeout(() => {
+                            msgBox.innerText = "오답 노트를 다 맞혔어! 최고야 🚀";
+                            isReviewMode = false;
+                            document.getElementById('review-btn').classList.remove('active');
+                            document.getElementById("question-area").innerText = "단원을 선택해!";
+                            document.getElementById("progress-text").innerText = "단원을 선택해서 10문제를 풀어보자!";
+                        }, 1500);
+                        return;
+                    }
+                }
+                setTimeout(nextQuestion, 1000);
+            } else {
+                msgBox.style.color = "red";
+                msgBox.innerText = "다시 한번 생각해볼까?";
+                
+                isFirstAttempt = false; // 틀렸으므로 점수에 들어가는 첫 시도 기회 박탈
+                
+                let alreadyExists = mistakes.some(m => m.dan === currentStage && m.mult === currentMultiplier);
+                if(!alreadyExists) {
+                    mistakes.push({dan: currentStage, mult: currentMultiplier});
+                }
+
+                showHint(currentStage, currentMultiplier);
+                userAnswer = "";
+                updateDisplay();
+            }
+        }
+
+        function showHint(dan, mult) {
+            let hintBox = document.getElementById("hint-area");
+            hintBox.innerHTML = "";
+            hintBox.style.display = "flex";
+
+            let visualHtml = "";
+            for(let i=0; i<dan; i++) {
+                visualHtml += "<div class='dot-row'>";
+                for(let j=0; j<mult; j++) {
+                    visualHtml += "<div class='dot'></div>";
+                }
+                visualHtml += "</div>";
+            }
+            hintBox.innerHTML += visualHtml;
+
+            let hintText = `<div class='hint-text'>점이 가로로 ${mult}개씩 ${dan}줄 있어!</div>`;
+            
+            if(dan === 9) {
+                hintText += `<div class='hint-text'>💡 힌트: 10을 곱한 뒤 자기 자신을 한 번 빼볼까? (${mult}0 - ${mult})</div>`;
+            } else if (dan === 7 && mult === 8) {
+                hintText += `<div class='hint-text'>💡 힌트: 7 × 5 = 35 와 7 × 3 = 21 을 더해보자!</div>`;
+            }
+            
+            hintBox.innerHTML += hintText;
+        }
+    </script>
+</body>
+</html>
